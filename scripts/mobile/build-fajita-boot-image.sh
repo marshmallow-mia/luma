@@ -99,8 +99,9 @@ for opt in CONFIG_RD_GZIP=y CONFIG_RD_ZSTD=y CONFIG_BLK_DEV_INITRD=y; do
   grep -qx "$opt" "$kdir/config" || fail "the kernel lacks $opt"
 done
 commit=$(ostree --repo="$ostree_repo" rev-parse "$ref")
-epoch=${SOURCE_DATE_EPOCH:-$(ostree --repo="$ostree_repo" show --print-metadata-key=ostree.commit.timestamp "$commit" 2>/dev/null | tr -dc 0-9)}
-[ -n "$epoch" ] || epoch=$(date -u -d "$(ostree --repo="$ostree_repo" log "$commit" | sed -n 's/^Date: *//p' | head -n 1)" +%s)
+# The commit's date ("Date:  2026-11-11 06:35:44 +0000").
+epoch=${SOURCE_DATE_EPOCH:-$(date -u -d "$(ostree --repo="$ostree_repo" show "$commit" | sed -n 's/^Date: *//p' | head -n 1)" +%s)}
+case "$epoch" in ''|*[!0-9]*) fail "cannot read the commit's date" ;; esac
 
 work=$(mktemp -d "${TMPDIR:-/var/tmp}/fajita-boot.XXXXXX")
 trap 'rm -rf "$work"' EXIT
@@ -158,8 +159,8 @@ depmod -b "$o/usr" "$release"
 # initramfs.load lists module names, not paths: the base file stays valid.
 
 # ostree-prepare-root with its configuration and libraries, from the commit.
-ostree --repo="$ostree_repo" checkout -U --subpath=/usr/lib/ostree/ostree-prepare-root "$commit" "$work/prepare-root"
-install -m 0755 "$work/prepare-root" "$o/usr/lib/ostree/ostree-prepare-root"
+ostree --repo="$ostree_repo" cat "$commit" /usr/lib/ostree/ostree-prepare-root >"$o/usr/lib/ostree/ostree-prepare-root"
+chmod 0755 "$o/usr/lib/ostree/ostree-prepare-root"
 if ostree --repo="$ostree_repo" cat "$commit" /usr/lib/ostree/prepare-root.conf >"$work/prepare-root.conf" 2>/dev/null; then
   install -m 0644 "$work/prepare-root.conf" "$o/usr/lib/ostree/prepare-root.conf"
 fi
@@ -204,9 +205,18 @@ while todo:
         if lib in done:
             continue
         done.add(lib)
-        data = ostree("cat", commit, resolve("/usr/lib64/" + lib))
-        dest = root / "usr/lib64" / lib
-        dest.write_bytes(data); dest.chmod(0o755)
+        # Fedora's default library directories (ld.so searches both).
+        for directory in ("/usr/lib64", "/usr/lib"):
+            try:
+                path = resolve(f"{directory}/{lib}")
+            except subprocess.CalledProcessError:
+                continue
+            break
+        else:
+            raise SystemExit(f"{lib} is not in the commit")
+        dest = root / directory.lstrip("/") / lib
+        dest.parent.mkdir(parents=True, exist_ok=True)
+        dest.write_bytes(ostree("cat", commit, path)); dest.chmod(0o755)
         todo.append(dest)
 print(f"{len(done)} files for ostree-prepare-root")
 PY
