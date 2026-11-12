@@ -77,6 +77,11 @@ android-tools`. `OUT` is a work directory.
    tar's `usr/lib/firmware`) and `lib/luma/fajita-rpms` (the RPMs), then as
    root:
    `scripts/mobile/build-phone-userdata.sh --repo OUT/repo --ref luma/1/aarch64/nightly --var-seed SEED --output luma-fajita-userdata.sparse`.
+   Keep the seed on a case-sensitive filesystem: the modules include
+   `xt_TCPMSS.ko.zst` and `xt_tcpmss.ko.zst`. On a host with SELinux enforcing,
+   the build fails unless the host policy knows every label in the commit
+   (it carries the snapd and waydroid modules); a container on a host without
+   SELinux works.
 
 ## Flash
 
