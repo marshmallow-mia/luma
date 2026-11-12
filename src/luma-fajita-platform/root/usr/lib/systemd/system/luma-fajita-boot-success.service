@@ -1,0 +1,15 @@
+[Unit]
+Description=OnePlus 6T: mark the running boot slot successful
+Documentation=man:qbootctl(8)
+ConditionFirmware=device-tree-compatible(oneplus,fajita)
+# Only a boot that greenboot found healthy. Without this the bootloader counts
+# every boot as a failed try and switches slots after 7 boots.
+Requires=boot-complete.target
+After=boot-complete.target multi-user.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/qbootctl -m
+
+[Install]
+WantedBy=multi-user.target

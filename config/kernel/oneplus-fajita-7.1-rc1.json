@@ -37,6 +37,12 @@
       "path": "device/community/linux-postmarketos-qcom-sdm845/libbpf-Fix-UAF-in-strset__add_str.patch",
       "sha256": "aacf8a93fd20dda0e034711a836fc1f6dbec79493eece8d1d107b3cdb1edfa42",
       "origin": "postmarketOS linux-postmarketos-qcom-sdm845 7.1_rc1"
+    },
+    {
+      "source": "repository",
+      "path": "patches/linux-sdm845/0001-tools-include-define-__u128-for-host-uapi-headers.patch",
+      "sha256": "09bbc63fef815016aeb0126d3316a4263cb31e1d190b80474d51b47374f725b8",
+      "origin": "Luma: build the tools against Fedora 44 kernel-headers 7.3"
     }
   ]
 }

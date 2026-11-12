@@ -1,0 +1,41 @@
+From: Project Luma <maintainers@projectluma.org>
+Subject: [PATCH] tools/include: define __u128 and __s128 for host uapi headers
+
+The tools build (resolve_btfids, libbpf, libsubcmd) resolves <linux/types.h>
+to tools/include/linux/types.h or tools/include/uapi/linux/types.h instead of
+the host's. Host arm64 headers from Linux 7.3 (Fedora 44 kernel-headers
+7.3.3) use __u128 in <asm/ptrace.h> and <asm/sigcontext.h>, which then fails
+with "unknown type name '__u128'". Define the two types in both copies as
+include/uapi/linux/types.h does.
+
+SPDX-License-Identifier: GPL-2.0-only
+---
+--- a/tools/include/linux/types.h
++++ b/tools/include/linux/types.h
+@@ -13,6 +13,12 @@
+ #include <asm/types.h>
+ #include <asm/posix_types.h>
+ 
++/* As include/uapi/linux/types.h: host uapi headers use these. */
++#ifdef __SIZEOF_INT128__
++typedef __signed__ __int128 __s128 __attribute__((aligned(16)));
++typedef unsigned __int128 __u128 __attribute__((aligned(16)));
++#endif
++
+ struct page;
+ struct kmem_cache;
+ 
+--- a/tools/include/uapi/linux/types.h
++++ b/tools/include/uapi/linux/types.h
+@@ -7,6 +7,11 @@
+ #ifndef __ASSEMBLER__
+ 
+ /* copied from linux:include/uapi/linux/types.h */
++#ifdef __SIZEOF_INT128__
++typedef __signed__ __int128 __s128 __attribute__((aligned(16)));
++typedef unsigned __int128 __u128 __attribute__((aligned(16)));
++#endif
++
+ #define __bitwise
+ typedef __u16 __bitwise __le16;
+ typedef __u16 __bitwise __be16;

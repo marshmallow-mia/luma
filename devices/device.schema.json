@@ -69,9 +69,11 @@
         "init_functions": {"$ref": "#/$defs/relpath"},
         "init_functions_sha256": {"$ref": "#/$defs/sha256"},
         "ostree_package": {"type": "string", "pattern": "^ostree-[0-9.]+-[A-Za-z0-9._]+$"},
-        "ostree_source": {"$ref": "#/$defs/relpath"}
+        "ostree_source": {"$ref": "#/$defs/relpath"},
+        "base_boot_image": {"description": "Published boot image whose ramdisk is the base (ramdisk_sha256), when no Luma release carries it.", "type": "string", "pattern": "^https://"},
+        "base_boot_image_sha256": {"$ref": "#/$defs/sha256"}
       },
-      "dependentRequired": {"init_functions": ["init_functions_sha256"]}
+      "dependentRequired": {"init_functions": ["init_functions_sha256"], "base_boot_image": ["base_boot_image_sha256"]}
     },
     "firmware": {
       "type": "object", "additionalProperties": false,

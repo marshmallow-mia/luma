@@ -1,0 +1,6 @@
+enable luma-clock-restore.service
+enable luma-clock-save.timer
+enable luma-fajita-bluetooth-address.service
+enable luma-fajita-boot-success.service
+enable rmtfs.service
+enable tqftpserv.service

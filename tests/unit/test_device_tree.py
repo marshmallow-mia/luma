@@ -22,10 +22,12 @@ class DeviceTree(unittest.TestCase):
                             ignore=shutil.ignore_patterns("__pycache__"))
         (self.root / ".github").mkdir()
         shutil.copy(ROOT / ".github" / "CODEOWNERS", self.root / ".github" / "CODEOWNERS")
-        for name in ("scripts/mobile/fp6-native-init-functions.sh", "config/mobile/fp6-ostree-source.json"):
+        for name in ("scripts/mobile/fp6-native-init-functions.sh", "config/mobile/fp6-ostree-source.json",
+                     "scripts/mobile/fajita-init-functions.sh"):
             (self.root / name).parent.mkdir(parents=True, exist_ok=True)
             shutil.copy(ROOT / name, self.root / name)
-        for name in ("config/kernel", "patches/linux-milos", "patches/linux-surface-pro12"):
+        for name in ("config/kernel", "patches/linux-milos", "patches/linux-surface-pro12",
+                     "patches/linux-sdm845"):
             shutil.copytree(ROOT / name, self.root / name)
         self.fp6 = self.root / "devices" / "fairphone" / "fp6"
 

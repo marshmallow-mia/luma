@@ -15,7 +15,9 @@
 # argument that names the slot link (ostree=/ostree/root.a): libostree follows
 # the link when the slot suffix is set, and ostree-remount, ostree-boot-complete
 # and rpm-ostree-fix-shadow-mode only run with an ostree= argument present.
-[ -e /etc/luma-fp6-ostree ] || exit 0
+# The boot image declares Luma OSTree mode: /etc/luma-ostree-boot, or the
+# Fairphone 6 Alpha 1 ramdisk's /etc/luma-fp6-ostree.
+[ -e /etc/luma-ostree-boot ] || [ -e /etc/luma-fp6-ostree ] || exit 0
 [ -r /usr/lib/luma/ostree-boot.sh ] || exit 0
 . /usr/lib/luma/ostree-boot.sh
 . /init_functions.sh

@@ -16,11 +16,15 @@
 # grows LumaRoot to fill userdata on the first boot.
 #
 # usage: build-phone-userdata.sh --repo REPO --ref REF --output FILE [--size SIZE]
+#          [--var-seed DIR]
 #
 # REF (luma/<major>/aarch64/<channel>) is deployed from the OSTree repository
 # REPO with origin luma:REF; a commit carrying a hardware target is refused.
 # /ostree/root.a and root.b point at the deployment (the aboot slot links).
 # /etc/luma/device-kit.conf names LumaBoot as the device kit's filesystem.
+# --var-seed DIR copies DIR into the stateroot's /var, owned by root and
+# labeled as its /var paths: files a phone without a device kit needs before
+# its packages are layered (devices/oneplus/fajita/INSTALL.md).
 # One user, luma, password 1234. /etc/systemd/system/boot.automount is masked
 # (systemd-gpt-auto's /boot automount breaks shutdown on these phones), and so
 # is bootloader-update.service (no EFI system partition). luma-grow-root.service
@@ -47,13 +51,14 @@ if [ -z "${LUMA_PHONE_USERDATA_NS:-}" ]; then
 fi
 root_uuid=03797c05-cf87-4eda-adc4-6ce111baf2d3
 boot_uuid=032D-57AD
-repo="" ref="" output="" size=12G
+repo="" ref="" output="" size=12G var_seed=""
 while [ "$#" -gt 0 ]; do
   case "$1" in
     --repo) repo=$(realpath -e "${2:?}"); shift 2 ;;
     --ref) ref=${2:?}; shift 2 ;;
     --output) output=${2:?}; shift 2 ;;
     --size) size=${2:?}; shift 2 ;;
+    --var-seed) var_seed=$(realpath -e "${2:?}"); shift 2 ;;
     *) sed -n 's/^# usage: /usage: /p' "$0" >&2; exit 2 ;;
   esac
 done
@@ -173,9 +178,35 @@ setfiles -r "$deploy" "$fc" "$deploy/etc" 2>/dev/null || true
 install -d -m 0755 "$var/lib/systemd" "$var/lib/systemd/timesync"
 touch -d "@$(date -u +%s)" "$var/lib/systemd/timesync/clock"
 
+seed_labels=()
+seed_copy() {
+  case "$1" in home|home/*|lib/systemd|lib/systemd/*) fail "--var-seed must not hold /var/$1" ;; esac
+  [ ! -e "$var/$1" ] && [ ! -L "$var/$1" ] || fail "--var-seed: /var/$1 is already in the deployment"
+  install -d -m 0755 "$(dirname "$var/$1")"
+  cp -a "$var_seed/$1" "$var/$1"
+  chown -hR 0:0 "$var/$1"
+  seed_labels+=(--var "$1")
+}
+if [ -n "$var_seed" ]; then
+  # Each entry one level down (lib/luma), or a file at the top, so the labels
+  # stay on what was seeded.
+  for top in "$var_seed"/*; do
+    [ -e "$top" ] || continue
+    if [ -d "$top" ] && [ ! -L "$top" ]; then
+      for entry in "$top"/*; do
+        [ -e "$entry" ] || [ -L "$entry" ] || continue
+        seed_copy "$(basename "$top")/$(basename "$entry")"
+      done
+    else
+      seed_copy "$(basename "$top")"
+    fi
+  done
+  echo "Seeded /var: ${seed_labels[*]}"
+fi
+
 label=$repo_root/scripts/mobile/common/label-ostree-physical-root.py
-python3 "$label" --file-contexts "$fc" --var home --var lib/systemd "$mnt"
-python3 "$label" --file-contexts "$fc" --var home --var lib/systemd --check "$mnt" >&2 ||
+python3 "$label" --file-contexts "$fc" --var home --var lib/systemd "${seed_labels[@]}" "$mnt"
+python3 "$label" --file-contexts "$fc" --var home --var lib/systemd "${seed_labels[@]}" --check "$mnt" >&2 ||
   fail "the physical root is not labeled"
 
 # The home directory is the skeleton and nothing else: no device presets.
@@ -189,6 +220,7 @@ diff <(cd "$deploy/etc/skel" && find . | sort) <(cd "$var/home/luma" && find . |
   echo "deployment=$(basename "$deploy")"
   echo "root_uuid=$root_uuid"
   echo "boot_uuid=$boot_uuid"
+  [ -z "$var_seed" ] || echo "var_seed=${seed_labels[*]}"
   sed 's/^/origin: /' "$deploy.origin"
 } >"$work/manifest"
 

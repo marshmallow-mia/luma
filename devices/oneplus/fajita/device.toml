@@ -21,20 +21,35 @@ dtb = "qcom/sdm845-oneplus-fajita.dtb"
 config = "boot.toml"
 
 [initramfs]
-# postmarketOS initramfs (postmarketos-initramfs 3.11.0-r1) with this
-# kernel's modules, ostree-prepare-root and its Fedora 44 libraries from the
-# deployment, and an OSTree hook before the os-release check.
-ramdisk_sha256 = "dd0fd5c9f3f74da7a42d028586a7cb880f46fecdd6b006a7668b4700d81f0bc3"
+# The boot image's ramdisk is two concatenated cpio archives; the kernel
+# unpacks them in order and later files replace earlier ones
+# (scripts/mobile/build-fajita-boot-image.sh):
+#  1: the ramdisk of the postmarketOS v26.06 OnePlus 6T boot image below
+#     (postmarketos-initramfs 3.11.0-r1), unmodified.
+#  2: Luma: init_functions.sh, this kernel's builds of the base ramdisk's
+#     modules, the shared OSTree boot resolver (scripts/mobile/common/initramfs),
+#     ostree-prepare-root with its configuration and Fedora 44 libraries from
+#     the deployed commit, and the clock floor. init_functions.sh leaves /boot
+#     on the root filesystem, where ostree writes the boot entries the resolver
+#     reads, and serves firmware and modules from /var/lib/luma until the
+#     device packages are layered (INSTALL.md).
+base_boot_image = "https://images.postmarketos.org/bpo/v26.06/oneplus-fajita/phosh/20261106-0600/20261106-0600-nura-v26.06-phosh-oneplus-fajita-boot.img.xz"
+base_boot_image_sha256 = "434c6316feb1b77320b7795237374faf1542b8e9d843d40b57742778be5c5a32"
+ramdisk_sha256 = "f7d80d765bd658f5a3825dc30925e3689af7337ec474da7dd1a3edb42859c917"
 base = "postmarketos-initramfs 3.11.0-r1"
+init_functions = "scripts/mobile/fajita-init-functions.sh"
+init_functions_sha256 = "3e882032dfbfef518ae685601a10b3099fed4c0004a02898d23d88b793afb1a2"
 
 [firmware]
 # OnePlus firmware from sdm845-mainline/firmware-oneplus-sdm845 (3e31a0c3)
-# and linux-firmware, as postmarketOS packages it. Names and hashes only.
+# and linux-firmware, as postmarketOS packages it (firmware-oneplus-sdm845
+# 14-r0; Alpine linux-firmware 20260519-r0). Names and hashes only.
 manifest = "firmware.manifest"
 manifest_sha256 = "baba8269982106e5f446e281675407d544e7610c428d918109e17f7031296684"
 files = 35
-# Where the OS keeps it on the phone: shared /var, outside the signed /usr.
-store = "/var/lib/luma/device-firmware"
+# Installed by luma-fajita-firmware in /usr/lib/firmware
+# (scripts/packages/assemble-luma-fajita-firmware.py pins the packages).
+store = "/usr/lib/firmware"
 
 [install]
 guide = "INSTALL.md"

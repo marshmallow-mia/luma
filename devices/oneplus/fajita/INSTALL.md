@@ -1,7 +1,9 @@
 # OnePlus 6T (fajita)
 
 Experimental. Luma does not publish images for this phone. You build them
-yourself. You need an unlocked bootloader and a phone you can erase.
+yourself. You need an unlocked bootloader and a phone you can erase. The
+OxygenOS firmware partitions must be intact (OxygenOS 11 on both slots is the
+tested base); a phone running another Linux install has them.
 
 ## What works
 
@@ -25,61 +27,61 @@ The install writes only `boot_a`, `boot_b` and `userdata`. Never write
 `modemst1`, `modemst2`, `fsg`, `fsc`, `persist`, `vbmeta_a`, `vbmeta_b`,
 `modem_a`, `modem_b` or `dtbo_a`/`dtbo_b`. `modemst1` and `modemst2` hold
 the phone's own modem settings, including its IMEI. Back up all of them
-before you start (read-only `dd` from a running Linux system).
+before you start (read-only `dd` from a running Linux system, for example
+`dd if=/dev/disk/by-partlabel/modemst1 of=modemst1.img`).
 
-## Firmware
+## How it boots
 
-The firmware is not in this tree. Use the OnePlus 6/6T files from
-[sdm845-mainline/firmware-oneplus-sdm845](https://gitlab.com/sdm845-mainline/firmware-oneplus-sdm845)
-(commit `3e31a0c3e5a061645c09f805387b49fa9d35acbf`) and linux-firmware, as
-postmarketOS packages them (`firmware-oneplus-sdm845`,
-`linux-firmware-ath10k`, `linux-firmware-qcom`). The image keeps them in
-`/var/lib/luma/device-firmware`. They must match `firmware.manifest`.
+The phone uses the generic phone userdata image
+(`scripts/mobile/build-phone-userdata.sh`) with its own boot image. There is
+no signed device kit for this phone, so its packages come from the userdata
+image instead:
+
+- The boot image (`scripts/mobile/build-fajita-boot-image.sh`) carries the
+  kernel, the DTB and the postmarketOS initramfs named in `device.toml`, plus
+  the Luma OSTree pieces. It boots ostree's default deployment, so one boot
+  image keeps working after updates and `rpm-ostree install`.
+- Until the device packages are layered, the initramfs takes firmware from
+  `/var/lib/luma/device-firmware` and kernel modules from
+  `/var/lib/luma/device-modules`. After layering, the deployment's own
+  `/usr/lib/firmware` and `/usr/lib/modules` are used.
+- The device packages: `kernel-modules-luma-fajita`, `luma-fajita-firmware`
+  (in `/usr/lib/firmware`) and `luma-fajita-platform` (rmtfs and tqftpserv,
+  `qbootctl -m` after `boot-complete.target`, the clock, the Bluetooth
+  address, the OnePlus 6T ALSA UCM, Android's hardware graphics path). Without
+  qbootctl the bootloader counts every boot as a failed try, marks the slot
+  unbootable after 7 boots and switches slots.
 
 ## Build
 
-1. Kernel: prepare the source from
-   `config/kernel/oneplus-fajita-7.1-rc1.json` with
-   `scripts/kernel/prepare-source.py`. Merge
-   `config/kernel/oneplus-fajita.config` into the base config named in the
-   lock (`scripts/kconfig/merge_config.sh -m`), run `make LLVM=1 olddefconfig`,
-   then build `Image.gz dtbs modules`.
-2. Initramfs: start from `postmarketos-initramfs` 3.11.0-r1. Replace its
-   modules with this kernel's. Add `ostree-prepare-root` and its Fedora 44
-   libraries from the deployment. Run the OSTree root setup before the
-   `/sysroot/etc/os-release` check, and do not mount the pmOS boot partition
-   over `/boot`. Before that, point `/ostree/root.a` and `/ostree/root.b` at
-   the deployment of the highest-version entry in `/boot/loader/entries`, so
-   one boot image keeps working after updates and `rpm-ostree install`. Kernel modules are overlaid from
-   `/var/lib/luma/device-modules`, and the firmware loader path points at
-   `/var/lib/luma/device-firmware`.
-3. Boot image: header v0, page size 4096, `Image.gz` with
-   `qcom/sdm845-oneplus-fajita.dtb` appended, offsets from
-   `socs/qcom/sdm845/soc.toml`, command line from `boot.toml` plus the
-   generated `pmos_root_uuid` and `pmos_boot_uuid` arguments.
-4. Userdata image: a GPT with 4096-byte sectors inside `userdata`
-   (`LumaBoot` FAT and `LumaRoot` ext4), the verified Luma commit deployed with
-   `ostree admin deploy`, and the device files on `/var`.
+On Fedora 44 aarch64 or in its container
+(`FEDORA_RPM_BUILD_CONTAINER_AARCH64` in `config/desktop/inputs.env`), with
+`clang lld llvm make bc flex bison elfutils-libelf-devel openssl-devel dwarves
+python3 perl git-core rpm-build systemd-rpm-macros cpio zstd xz kmod ostree
+android-tools`. `OUT` is a work directory.
 
-The device layer also needs, until Luma ships them for this SoC:
-
-- `rmtfs` enabled, and `tqftpserv` (Fedora 44 package) for the Wi-Fi firmware.
-- `qbootctl` (Fedora 44 package) run after `boot-complete.target`. Without
-  it the bootloader counts every boot as a failed try, marks the slot
-  unbootable after 7 boots and switches slots.
-- A clock floor: the PM8998 RTC starts at 1970, and GPG then rejects the
-  2026 Luma keys (Flatpak, GDM and updates fail).
-- A Bluetooth public address set from the SoC serial when `hci0` appears.
-- The OnePlus 6T ALSA UCM from
-  [sdm845-mainline/alsa-ucm-conf](https://gitlab.com/sdm845-mainline/alsa-ucm-conf)
-  (commit `1b8d290e`), and an `/etc/modprobe.d/dist-alsa.conf` that drops
-  Fedora's `snd-seq` install rule.
-- `/var/lib/waydroid/waydroid.cfg` with `gbm`, `mesa` and `freedreno`
-  (SimplyLuma/luma#286).
+1. Kernel: `scripts/kernel/build-fajita.sh OUT/kernel`.
+2. Firmware: `scripts/packages/assemble-luma-fajita-firmware.py --cache OUT/cache --output OUT/fajita-firmware.tar`.
+3. The OS: pull `luma/1/aarch64/nightly` from `https://dl.simplyluma.com/os/repo`
+   into `OUT/repo`, verified with `config/os/keys/luma-os-release.asc`.
+4. Packages:
+   `scripts/packages/build-kernel-modules-luma-fajita.sh OUT/kernel/modules`,
+   `scripts/packages/build-luma-fajita-firmware.sh OUT/fajita-firmware.tar --ostree-repo OUT/repo --ref luma/1/aarch64/nightly`,
+   `scripts/packages/build-luma-fajita-platform.sh`, and `dnf download`
+   `qbootctl rmtfs tqftpserv` with any dependencies the commit lacks
+   (the phone image turns Fedora's repositories off).
+5. Boot image: download `base_boot_image` from `device.toml`, then
+   `scripts/mobile/build-fajita-boot-image.sh --base-boot FILE --kernel-dir OUT/kernel --ostree-repo OUT/repo --ref luma/1/aarch64/nightly --output luma-fajita-boot.img`.
+6. Userdata: make a seed directory with `lib/luma/device-modules` (the
+   kernel's `modules/lib/modules`), `lib/luma/device-firmware` (the firmware
+   tar's `usr/lib/firmware`) and `lib/luma/fajita-rpms` (the RPMs), then as
+   root:
+   `scripts/mobile/build-phone-userdata.sh --repo OUT/repo --ref luma/1/aarch64/nightly --var-seed SEED --output luma-fajita-userdata.sparse`.
 
 ## Flash
 
-Enter fastboot: hold Volume Up and Power. Then:
+Enter fastboot: hold Volume Up and Power. Test a new boot image first, without
+writing it: `fastboot boot luma-fajita-boot.img`. Then:
 
 ```sh
 fastboot flash userdata luma-fajita-userdata.sparse
@@ -89,5 +91,17 @@ fastboot set_active a
 fastboot reboot
 ```
 
-Test a new boot image with `fastboot boot luma-fajita-boot.img` before you
-flash it. The USB rescue network is at 172.16.42.1.
+## First boot
+
+Sign in as `luma` (password `1234`) and change the password. Layer the device
+packages, then restart:
+
+```sh
+sudo rpm-ostree install /var/lib/luma/fajita-rpms/*.rpm
+systemctl reboot
+```
+
+After that boot, `rpm-ostree status` lists the packages, and
+`/var/lib/luma/device-modules` and `/var/lib/luma/device-firmware` are no
+longer used. Delete them to free the space. The USB rescue network is at
+172.16.42.1.

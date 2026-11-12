@@ -1,0 +1,46 @@
+#!/usr/bin/bash
+# SPDX-License-Identifier: Apache-2.0
+
+# The WCN3990 controller of the OnePlus 6T comes up unconfigured: the
+# bootloader passes no Bluetooth address. Give it a stable, locally
+# administered address derived from the SoC serial number, so pairings
+# survive reboots. Nothing is written to the phone's storage.
+
+set -euo pipefail
+
+serial=$(tr -d '[:space:]' </sys/devices/soc0/serial_number)
+[[ "$serial" =~ ^[0-9]+$ ]] || { printf 'unexpected SoC serial number\n' >&2; exit 1; }
+
+# A configured controller already has an address; never replace it.
+if /usr/bin/timeout 5 /usr/bin/btmgmt info 2>/dev/null \
+    | /usr/bin/grep -Eq '^hci[0-9]+:[[:space:]]+Primary controller$'; then
+  exit 0
+fi
+
+configuration=
+for _attempt in {1..40}; do
+  configuration=$(/usr/bin/timeout 5 /usr/bin/btmgmt config 2>/dev/null || true)
+  /usr/bin/grep -q '^hci0:.*Unconfigured controller$' <<<"$configuration" && break
+  /usr/bin/sleep 0.25
+done
+/usr/bin/grep -q 'missing options:.*public-address' <<<"$configuration" || {
+  printf 'the Bluetooth controller does not ask for a public address\n' >&2
+  exit 1
+}
+
+# First octet 0x02 bit set, 0x01 clear: locally administered, unicast.
+digest=$(printf 'luma-fajita-bluetooth:%s' "$serial" | /usr/bin/sha256sum | cut -c1-12)
+first=$(printf '%02x' $(( (16#${digest:0:2} & 0xfc) | 0x02 )))
+address="$first:${digest:2:2}:${digest:4:2}:${digest:6:2}:${digest:8:2}:${digest:10:2}"
+/usr/bin/btmgmt --index hci0 public-addr "$address" >/dev/null
+
+for _attempt in {1..20}; do
+  controller=$(/usr/bin/timeout 5 /usr/bin/btmgmt info 2>/dev/null || true)
+  if /usr/bin/grep -q '^hci0:.*Primary controller$' <<<"$controller" \
+      && /usr/bin/grep -Fqi "addr $address " <<<"$controller"; then
+    exit 0
+  fi
+  /usr/bin/sleep 0.25
+done
+printf 'the Bluetooth controller rejected address %s\n' "$address" >&2
+exit 1
