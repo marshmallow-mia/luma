@@ -38,7 +38,7 @@ base_boot_image_sha256 = "434c6316feb1b77320b7795237374faf1542b8e9d843d40b577427
 ramdisk_sha256 = "f7d80d765bd658f5a3825dc30925e3689af7337ec474da7dd1a3edb42859c917"
 base = "postmarketos-initramfs 3.11.0-r1"
 init_functions = "scripts/mobile/fajita-init-functions.sh"
-init_functions_sha256 = "3e882032dfbfef518ae685601a10b3099fed4c0004a02898d23d88b793afb1a2"
+init_functions_sha256 = "3edbbedb36d4e2327937347b0cf103f6d448e5fa63bba476001059e54f18f0d1"
 
 [firmware]
 # OnePlus firmware from sdm845-mainline/firmware-oneplus-sdm845 (3e31a0c3)

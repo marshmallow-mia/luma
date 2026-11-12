@@ -164,11 +164,6 @@ chmod 0755 "$o/usr/lib/ostree/ostree-prepare-root"
 if ostree --repo="$ostree_repo" cat "$commit" /usr/lib/ostree/prepare-root.conf >"$work/prepare-root.conf" 2>/dev/null; then
   install -m 0644 "$work/prepare-root.conf" "$o/usr/lib/ostree/prepare-root.conf"
 fi
-# A Luma ostree mounts the stateroot's /var in the initramfs on request
-# (luma_prepare_ostree_root in init_functions.sh).
-if grep -aq 'initramfs-mount-var' "$o/usr/lib/ostree/ostree-prepare-root"; then
-  : >"$o/etc/luma-ostree-mount-var"
-fi
 python3 - "$ostree_repo" "$commit" "$o" "$readelf" <<'PY'
 import posixpath, subprocess, sys
 from pathlib import Path
@@ -269,6 +264,6 @@ size=$(stat -c %s "$work/boot.img")
 [ "$size" -le "$partition_size" ] || fail "the image ($size bytes) does not fit the boot partition ($partition_size)"
 
 install -D -m 0644 "$work/boot.img" "$output"
-printf 'CMDLINE=%s\nCOMMIT=%s\nCLOCK_FLOOR=%s\nMOUNT_VAR=%s\nBOOT_SHA256=%s\nBASE_BOOT_SHA256=%s\nRAMDISK_OVERLAY_SHA256=%s\n' \
-  "$cmdline" "$commit" "$epoch" "$([ -e "$o/etc/luma-ostree-mount-var" ] && echo yes || echo no)" \
+printf 'CMDLINE=%s\nCOMMIT=%s\nCLOCK_FLOOR=%s\nBOOT_SHA256=%s\nBASE_BOOT_SHA256=%s\nRAMDISK_OVERLAY_SHA256=%s\n' \
+  "$cmdline" "$commit" "$epoch" \
   "$(sha256sum "$output" | cut -d' ' -f1)" "$base_sha256" "$(sha256sum "$work/overlay.cpio.gz" | cut -d' ' -f1)"

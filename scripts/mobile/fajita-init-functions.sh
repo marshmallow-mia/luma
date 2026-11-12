@@ -759,23 +759,16 @@ luma_prepare_ostree_root() {
 	[ "$count" -eq 1 ] || return 1
 	[ -L "/sysroot/ostree/root.${suffix#_}" ] || return 1
 	[ -x /usr/lib/ostree/ostree-prepare-root ] || return 1
-	if [ -e /etc/luma-ostree-mount-var ]; then
-		# This ostree-prepare-root mounts the stateroot's /var on request,
-		# so systemd sees /var/lib/systemd/timesync/clock as it starts.
-		mkdir -p /run/ostree || return 1
-		[ ! -L /run/ostree/initramfs-mount-var ] || return 1
-		: > /run/ostree/initramfs-mount-var || return 1
-	fi
+	# Fedora's ostree-prepare-root creates /run/ostree itself and fails if it
+	# exists, so no early /var request: systemd mounts /var after switch_root
+	# (luma_clock_floor covers the first boot). prepare-root mounts the
+	# stateroot's /var under the physical root, /sysroot/sysroot.
+	[ ! -e /run/ostree ] || return 1
 	/usr/lib/ostree/ostree-prepare-root /sysroot "$cmdline" || return 1
-	if [ -e /run/ostree/initramfs-mount-var ]; then
-		var=/sysroot/var
-	else
-		# The physical root is at /sysroot/sysroot after prepare-root.
-		var=
-		for word in /sysroot/sysroot/ostree/deploy/*/var; do
-			[ -d "$word" ] && { var="$word"; break; }
-		done
-	fi
+	var=
+	for word in /sysroot/sysroot/ostree/deploy/*/var; do
+		[ -d "$word" ] && { var="$word"; break; }
+	done
 	[ -w /sys/module/firmware_class/parameters/path ] || return 1
 	if [ ! -e "/sysroot/usr/lib/firmware/$luma_fajita_firmware_marker" ] &&
 			[ -n "$var" ] && [ -d "$var/lib/luma/device-firmware" ] && [ ! -L "$var/lib/luma/device-firmware" ]; then
@@ -795,9 +788,6 @@ luma_prepare_ostree_root() {
 		echo "Luma: kernel modules from /var/lib/luma/device-modules"
 	fi
 	[ -f /sysroot/etc/os-release ] || return 1
-	# prepare-root consumed the early /var request. Let the real-root generator
-	# create the boot bind mount and required OSTree units after switch_root.
-	rm -f /run/ostree/initramfs-mount-var || return 1
 }
 
 mount_root_partition() {
