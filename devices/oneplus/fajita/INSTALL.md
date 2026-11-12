@@ -106,6 +106,28 @@ sudo rpm-ostree install /var/lib/luma/fajita-rpms/*.rpm
 systemctl reboot
 ```
 
+The image sets no keyboard layout, and without one the login screen's
+on-screen keyboard does not open. Set one before restarting (from a terminal
+in the first session):
+
+```sh
+sudo localectl set-x11-keymap us pc105
+```
+
+Android sets itself up on the first boot, before the packages are layered.
+The nightly's luma-android does not yet recognize the SDM845 render node
+(`msm_dpu`, fixed in this repository), so Android starts with software
+rendering and runs slowly. Switch it to the GPU once:
+
+```sh
+sudo sed -i -e 's/^ro.hardware.gralloc = default$/ro.hardware.gralloc = gbm/' \
+  -e 's/^ro.hardware.egl = angle$/ro.hardware.egl = mesa/' \
+  -e 's/^ro.hardware.vulkan = pastel$/ro.hardware.vulkan = freedreno/' \
+  /var/lib/waydroid/waydroid.cfg
+waydroid session stop
+sudo waydroid upgrade --offline
+```
+
 After that boot, `rpm-ostree status` lists the packages, and
 `/var/lib/luma/device-modules` and `/var/lib/luma/device-firmware` are no
 longer used. Delete them to free the space. The USB rescue network is at
